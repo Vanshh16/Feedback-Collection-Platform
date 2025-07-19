@@ -3,20 +3,42 @@ import { AppBar, Toolbar, Typography, Button, Box, Avatar, Menu, MenuItem, IconB
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { BubbleChart as BubbleChartIcon, Logout as LogoutIcon, Dashboard as DashboardIcon } from '@mui/icons-material';
 import toast from 'react-hot-toast';
+import api from '../services/api'; // We'll use this to fetch admin data
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const location = useLocation(); // Hook to listen to path changes
+  const location = useLocation();
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const [admin, setAdmin] = useState(null); // New state to hold admin data
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
 
-  // This effect listens for changes in the URL path.
-  // It re-checks for the token, which is useful for ensuring the navbar
-  // is in sync after login/registration navigation.
+  // This effect now also fetches the admin's data when the token is present
   useEffect(() => {
-    setToken(localStorage.getItem('token'));
-  }, [location]);
+    const updateAuthStatus = async () => {
+        const currentToken = localStorage.getItem('token');
+        setToken(currentToken);
+
+        if (currentToken) {
+            try {
+                // Fetch admin data from the /api/auth/me endpoint
+                const res = await api.get('/auth/me');
+                setAdmin(res.data);
+            } catch (err) {
+                console.error("Failed to fetch admin data, token might be invalid.", err);
+                // If the token is invalid, log the user out
+                localStorage.removeItem('token');
+                setToken(null);
+                setAdmin(null);
+                navigate('/login');
+            }
+        } else {
+            setAdmin(null);
+        }
+    };
+    
+    updateAuthStatus();
+  }, [location, navigate]);
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -30,15 +52,23 @@ const Navbar = () => {
     handleClose();
     toast.success('You have been logged out.');
     localStorage.removeItem('token');
-    setToken(null); // Update state to re-render the navbar
+    setToken(null);
+    setAdmin(null); // Clear admin data on logout
     navigate('/login');
+  };
+
+  // Helper to get the first initial of the username
+  const getInitial = () => {
+      if (admin && admin.username) {
+          return admin.username.charAt(0).toUpperCase();
+      }
+      return '?'; // Fallback if admin data isn't loaded yet
   };
 
   return (
     <AppBar 
       position="sticky" 
       sx={{ 
-        // Glassmorphism effect
         background: (theme) => theme.palette.mode === 'light' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(18, 18, 18, 0.7)',
         backdropFilter: 'blur(10px)',
         boxShadow: 'inset 0px -1px 1px #E7EBF0',
@@ -56,11 +86,13 @@ const Navbar = () => {
         <Box sx={{ flexGrow: 1 }} />
 
         {token ? (
-          // --- Logged-in admin view ---
           <Box>
-            <Tooltip title="Account settings">
+            <Tooltip title="Account">
               <IconButton onClick={handleMenu} size="small" sx={{ ml: 2 }}>
-                <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>A</Avatar>
+                {/* Updated Avatar to display the user's initial */}
+                <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                    {getInitial()}
+                </Avatar>
               </IconButton>
             </Tooltip>
             <Menu
@@ -76,12 +108,7 @@ const Navbar = () => {
                   overflow: 'visible',
                   filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.15))',
                   mt: 1.5,
-                  '& .MuiAvatar-root': {
-                    width: 32,
-                    height: 32,
-                    ml: -0.5,
-                    mr: 1,
-                  },
+                  '& .MuiAvatar-root': { width: 32, height: 32, ml: -0.5, mr: 1, },
                 },
               }}
             >
@@ -95,7 +122,6 @@ const Navbar = () => {
             </Menu>
           </Box>
         ) : (
-          // --- Logged-out view ---
           <Box>
             <Button component={Link} to="/login" sx={{ color: 'text.secondary' }}>
               Login

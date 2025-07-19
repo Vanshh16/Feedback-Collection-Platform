@@ -4,14 +4,17 @@ const Response = require('../models/Response');
 // @desc    Create a new feedback form
 // @route   POST /api/forms
 // @access  Private
-const createForm = async (req, res) => {
-    const { title, questions } = req.body;
+ const createForm = async (req, res) => {
+    
+    const { title, description, questions } = req.body;
+
     if (!title || !questions || !Array.isArray(questions) || questions.length === 0) {
         return res.status(400).json({ message: 'Please provide a title and at least one question' });
     }
     try {
         const form = await Form.create({
             title,
+            description, // <-- Pass description to the create method
             questions,
             adminId: req.admin._id,
         });
@@ -59,11 +62,12 @@ const getFormById = async (req, res) => {
 // @access  Public
 const getPublicFormByUrl = async (req, res) => {
     try {
-        const form = await Form.findOne({ publicUrl: req.params.url }).select('title questions status');
+        // ***** ADD description to the select() method *****
+        const form = await Form.findOne({ publicUrl: req.params.url }).select('title description questions status');
+
         if (!form) {
             return res.status(404).json({ message: 'Form not found or link is invalid' });
         }
-        // New check: Don't show questions if the form is closed
         if (form.status === 'closed') {
             return res.status(403).json({ message: 'This form is no longer accepting responses.', formStatus: 'closed' });
         }
@@ -74,7 +78,6 @@ const getPublicFormByUrl = async (req, res) => {
     }
 };
 
-// ***** NEW FUNCTION *****
 // @desc    Update a form (title, questions, or status)
 // @route   PUT /api/forms/:id
 // @access  Private
@@ -84,27 +87,28 @@ const updateForm = async (req, res) => {
         if (!form) {
             return res.status(404).json({ message: 'Form not found' });
         }
-        // Ensure the logged-in admin owns this form
         if (form.adminId.toString() !== req.admin._id.toString()) {
             return res.status(401).json({ message: 'Not authorized to update this form' });
         }
 
-        const { title, questions, status } = req.body;
+        const { title, description, questions, status } = req.body;
 
-        // Case 1: Only updating the status (open/closed)
         if (status) {
             form.status = status;
             const updatedForm = await form.save();
             return res.status(200).json(updatedForm);
         }
 
-        // Case 2: Updating the form content (title/questions)
-        // Enforce the rule: cannot edit if responses exist
         if (form.responseCount > 0) {
             return res.status(403).json({ message: 'Cannot edit a form that already has responses.' });
         }
 
         if (title) form.title = title;
+        
+        // Use `hasOwnProperty` to allow setting an empty string
+        if (req.body.hasOwnProperty('description')) {
+            form.description = description;
+        }
         if (questions) form.questions = questions;
 
         const updatedForm = await form.save();
@@ -142,6 +146,6 @@ module.exports = {
     getAdminForms,
     getFormById,
     getPublicFormByUrl,
-    updateForm, // <-- Export the new function
+    updateForm, 
     deleteForm,
 };

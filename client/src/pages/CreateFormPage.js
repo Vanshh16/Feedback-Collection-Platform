@@ -18,6 +18,7 @@ const CreateFormPage = () => {
   const isEditMode = Boolean(formId);
 
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(isEditMode); // Start loading if in edit mode
   const [saving, setSaving] = useState(false);
@@ -32,6 +33,7 @@ const CreateFormPage = () => {
         try {
           const res = await api.get(`/forms/${formId}`);
           setTitle(res.data.title);
+          setDescription(res.data.description || '');
           // Ensure every question has a 'required' field for backward compatibility
           const fetchedQuestions = res.data.questions.map(q => ({ ...q, required: q.required || false }));
           setQuestions(fetchedQuestions);
@@ -54,6 +56,11 @@ const CreateFormPage = () => {
     setQuestions([...questions, { questionText: '', questionType: 'text', options: [], required: false }]);
   };
 
+  const handleRemoveQuestion = (index) => {
+    const newQuestions = questions.filter((_, i) => i !== index);
+    setQuestions(newQuestions);
+  };
+  
   const handleQuestionUpdate = (index, field, value) => {
     const newQuestions = [...questions];
     newQuestions[index][field] = value;
@@ -101,7 +108,7 @@ const CreateFormPage = () => {
 
     setSaving(true);
     const toastId = toast.loading(isEditMode ? 'Updating form...' : 'Saving form...');
-    const formData = { title, questions };
+    const formData = { title, description, questions };
 
     try {
       if (isEditMode) {
@@ -152,6 +159,16 @@ const CreateFormPage = () => {
             <Paper sx={{ p: 3, position: 'sticky', top: theme.spacing(10) }}>
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>Form Settings</Typography>
               <TextField fullWidth label="Form Title" value={title} onChange={(e) => setTitle(e.target.value)} variant="filled" required />
+              <TextField
+                fullWidth
+                label="Form Description (Optional)"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                variant="filled"
+                multiline
+                rows={4}
+                sx={{ mt: 2 }}
+              />
             </Paper>
           </Grid>
 

@@ -177,6 +177,11 @@ const PublicFormPage = () => {
         <Paper elevation={0} sx={{ p: { xs: 2, sm: 4 }, borderRadius: 4, border: '1px solid', borderColor: 'divider' }}>
           <motion.div variants={itemVariants}>
             <Typography variant="h4" component="h1" gutterBottom textAlign="center" sx={{ fontWeight: 'bold' }}>{form.title}</Typography>
+            {form.description && (
+                <Typography color="text.secondary" textAlign="center" sx={{ mb: 4, whiteSpace: 'pre-wrap' }}>
+                    {form.description}
+                </Typography>
+            )}
             <Typography color="text.secondary" textAlign="center" sx={{ mb: 4 }}>Please fill out the form below.</Typography>
           </motion.div>
           <Box component="form" onSubmit={handleSubmit}>

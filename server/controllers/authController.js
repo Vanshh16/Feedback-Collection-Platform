@@ -19,6 +19,10 @@ const registerAdmin = async (req, res) => {
         return res.status(400).json({ message: 'Please enter all fields' });
     }
 
+    if (!username || !password) {
+        return res.status(400).json({ message: 'Please enter all fields' });
+    }
+
     try {
         // Check if admin already exists
         const adminExists = await Admin.findOne({ username });
@@ -44,7 +48,7 @@ const registerAdmin = async (req, res) => {
         }
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Server Error' });
+        res.status(500).json({ message: error.message});
     }
 };
 

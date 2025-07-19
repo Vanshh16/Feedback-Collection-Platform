@@ -39,6 +39,12 @@ const FormSchema = new mongoose.Schema({
         required: [true, 'Please add a form title'],
         trim: true,
     },
+    // ***** NEW FIELD *****
+    description: {
+        type: String,
+        trim: true,
+        default: '', // Default to an empty string
+    },
     adminId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Admin',

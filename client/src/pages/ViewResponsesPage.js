@@ -27,10 +27,12 @@ import {
     ArrowBack as ArrowBackIcon,
     Assessment as AssessmentIcon,
     TableRows as TableRowsIcon,
-    QuestionAnswer as QuestionAnswerIcon
+    QuestionAnswer as QuestionAnswerIcon,
+    PieChart as PieChartIcon,
+    BarChart as BarChartIcon
 } from '@mui/icons-material';
 import toast from 'react-hot-toast';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, PieChart, Pie, Legend } from 'recharts';
 import api from '../services/api';
 
 const ViewResponsesPage = () => {
@@ -40,6 +42,7 @@ const ViewResponsesPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [view, setView] = useState('summary');
+  const [chartType, setChartType] = useState('bar'); // State for chart type
   const theme = useTheme();
 
   const CHART_COLORS = ['#6366f1', '#818cf8', '#a78bfa', '#c084fc', '#e879f9', '#f472b6'];
@@ -68,6 +71,10 @@ const ViewResponsesPage = () => {
   const handleViewChange = (_, newView) => {
     if (newView !== null) setView(newView);
   };
+  
+  const handleChartTypeChange = (_, newChartType) => {
+    if (newChartType !== null) setChartType(newChartType);
+  };
 
   const handleExport = async () => {
     const toastId = toast.loading('Preparing CSV export...');
@@ -91,21 +98,45 @@ const ViewResponsesPage = () => {
   };
 
   const summaryData = useMemo(() => {
-    if (!form || !responses.length) return [];
+    if (!form || !responses.length) return { optionCharts: [], ratingCharts: [] };
     
-    const mcQuestions = form.questions.filter(q => q.questionType === 'multiple-choice');
-    
-    return mcQuestions.map(q => {
-        const counts = q.options.map(opt => ({ name: opt, responses: 0 }));
+    // Process multiple-choice, checkboxes, dropdowns
+    const optionQuestions = form.questions.filter(q => ['multiple-choice', 'checkboxes', 'dropdown'].includes(q.questionType));
+    const optionCharts = optionQuestions.map(q => {
+        const counts = q.options.map(opt => ({ name: opt, value: 0 }));
         responses.forEach(res => {
             const answerObj = res.answers.find(a => a.questionText === q.questionText);
-            if (answerObj) {
-                const optionIndex = counts.findIndex(c => c.name === answerObj.answer);
-                if (optionIndex !== -1) counts[optionIndex].responses++;
+            if (answerObj && answerObj.answer) {
+                const answers = q.questionType === 'checkboxes' ? answerObj.answer.split(', ') : [answerObj.answer];
+                answers.forEach(ans => {
+                    const optionIndex = counts.findIndex(c => c.name === ans);
+                    if (optionIndex !== -1) counts[optionIndex].value++;
+                });
+            }
+        });
+        return { question: q.questionText, data: counts.filter(c => c.value > 0) };
+    });
+
+    // Process rating-scale questions
+    const ratingQuestions = form.questions.filter(q => q.questionType === 'rating-scale');
+    const ratingCharts = ratingQuestions.map(q => {
+        const counts = [
+            { name: '1 Star', value: 0 }, { name: '2 Stars', value: 0 },
+            { name: '3 Stars', value: 0 }, { name: '4 Stars', value: 0 }, { name: '5 Stars', value: 0 }
+        ];
+        responses.forEach(res => {
+            const answerObj = res.answers.find(a => a.questionText === q.questionText);
+            if (answerObj && answerObj.answer) {
+                const rating = parseInt(answerObj.answer, 10);
+                if (rating >= 1 && rating <= 5) {
+                    counts[rating - 1].value++;
+                }
             }
         });
         return { question: q.questionText, data: counts };
     });
+
+    return { optionCharts, ratingCharts };
   }, [form, responses]);
 
   if (loading) {
@@ -130,7 +161,7 @@ const ViewResponsesPage = () => {
       <Button component={RouterLink} to="/" startIcon={<ArrowBackIcon />} sx={{ mb: 2 }}>
         Back to Dashboard
       </Button>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4 }}>
         <Box>
             <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>{form?.title}</Typography>
             <Typography color="text.secondary">Analysis of <strong>{responses.length}</strong> submitted response(s).</Typography>
@@ -141,9 +172,7 @@ const ViewResponsesPage = () => {
       </Box>
 
       {responses.length === 0 ? (
-        <Box textAlign="center" mt={8}>
-            <Typography variant="h5" sx={{ mt: 3, fontWeight: '600' }}>No responses yet</Typography>
-        </Box>
+        <Box textAlign="center" mt={8}><Typography variant="h5">No responses yet</Typography></Box>
       ) : (
         <>
           <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
@@ -153,33 +182,65 @@ const ViewResponsesPage = () => {
             </ToggleButtonGroup>
           </Box>
           
+          {view === 'summary' && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
+                <ToggleButtonGroup size="small" color="primary" value={chartType} exclusive onChange={handleChartTypeChange}>
+                    <ToggleButton value="bar"><BarChartIcon sx={{mr:1}}/> Bar Charts</ToggleButton>
+                    <ToggleButton value="pie"><PieChartIcon sx={{mr:1}}/> Pie Charts</ToggleButton>
+                </ToggleButtonGroup>
+            </Box>
+          )}
+
           {view === 'summary' ? (
                <Grid container spacing={3} justifyContent="center">
-                  {summaryData.length === 0 && (
-                      <Grid item xs={12} md={8}>
-                          <Paper sx={{ p: 4, textAlign: 'center', backgroundColor: 'background.default' }}>
-                              <Typography variant="h6">No Multiple-Choice Data</Typography>
-                          </Paper>
-                      </Grid>
+                  {(summaryData.optionCharts.length === 0 && summaryData.ratingCharts.length === 0) && (
+                      <Grid item xs={12} md={8}><Paper sx={{ p: 4, textAlign: 'center' }}><Typography>No visual data to display.</Typography></Paper></Grid>
                   )}
-                  {summaryData.map((chart, index) => (
-                      <Grid item xs={12} sm={8} md={6} key={index}>
-                          <Card>
-                              <CardContent>
-                                  <Typography variant="h6" sx={{fontWeight: 600}}>{chart.question}</Typography>
-                              </CardContent>
+                  
+                  {/* Rating Scale Charts */}
+                  {summaryData.ratingCharts.map((chart, index) => (
+                      <Grid item xs={12} md={6} key={`rating-${index}`}>
+                          <Card><CardContent><Typography variant="h6">{chart.question}</Typography></CardContent>
                               <Box sx={{ p: 2 }}>
-                                <BarChart width={500} height={300} data={chart.data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+                                <BarChart width={500} height={300} data={chart.data}>
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis dataKey="name" />
                                     <YAxis allowDecimals={false}/>
                                     <Tooltip />
-                                    <Bar dataKey="responses" radius={[4, 4, 0, 0]}>
-                                        {chart.data.map((entry, i) => (
-                                            <Cell key={`cell-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                                        ))}
+                                    <Bar dataKey="value" name="Responses" radius={[4, 4, 0, 0]}>
+                                        {chart.data.map((entry, i) => <Cell key={`cell-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                                     </Bar>
                                 </BarChart>
+                              </Box>
+                          </Card>
+                      </Grid>
+                  ))}
+
+                  {/* Option-based Charts (Bar or Pie) */}
+                  {summaryData.optionCharts.map((chart, index) => (
+                      <Grid item xs={12} md={6} key={`option-${index}`}>
+                          <Card>
+                              <CardContent><Typography variant="h6">{chart.question}</Typography></CardContent>
+                              <Box sx={{ p: 2, display: 'flex', justifyContent: 'center' }}>
+                                {chartType === 'bar' ? (
+                                    <BarChart width={500} height={300} data={chart.data}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis dataKey="name" />
+                                        <YAxis allowDecimals={false}/>
+                                        <Tooltip />
+                                        <Bar dataKey="value" name="Responses" radius={[4, 4, 0, 0]}>
+                                            {chart.data.map((entry, i) => <Cell key={`cell-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                                        </Bar>
+                                    </BarChart>
+                                ) : (
+                                    <PieChart width={400} height={300}>
+                                        <Pie data={chart.data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
+                                            {chart.data.map((entry, i) => <Cell key={`cell-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                                        </Pie>
+                                        <Tooltip />
+                                        <Legend />
+                                    </PieChart>
+                                )}
                               </Box>
                           </Card>
                       </Grid>
